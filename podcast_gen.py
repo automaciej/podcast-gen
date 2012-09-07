@@ -14,6 +14,7 @@ import os
 import tagpy
 from email.utils import formatdate
 import datetime
+import urllib
 
 class Podcast(object):
 
@@ -58,7 +59,8 @@ class Podcast(object):
     self.owner_name = ET.SubElement(self.owner, "itunes:name")
     self.owner_name.text = config.get("iTunes", "owner_name")
     
-    audio_base_url = config.get("general", "url")
+    audio_base_host = config.get("general", "base_host")
+    audio_base_url = config.get("general", "base_url")
 
     # Processing the audio files.
     for rel_f in sorted(os.listdir(self.input_dir)):
@@ -73,13 +75,17 @@ class Podcast(object):
         title = ET.SubElement(item, "title")
         title.text = t.title
         link = ET.SubElement(item, "link")
-        link.text = audio_base_url + "/" + basename
+        audio_url = (
+            "http://"
+            + audio_base_host
+            + urllib.quote(audio_base_url + "/" + basename))
+        link.text = audio_url
         guid = ET.SubElement(item, "guid")
         guid.text = link.text
         desc = ET.SubElement(item, "description")
         desc.text = "by " + t.artist + " (%s)" % basename
         enc = ET.SubElement(item, "enclosure")
-        enc.set("url", audio_base_url + "/" + basename)
+        enc.set("url", audio_url)
         enc.set("length", unicode(st.st_size))
         enc.set("type", "audio/mpeg")
         cat = ET.SubElement(item, "category")
