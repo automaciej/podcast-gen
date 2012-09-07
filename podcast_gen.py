@@ -44,24 +44,21 @@ class Podcast(object):
         except ConfigParser.NoOptionError as e:
           logging.warning("Field %s.%s not found", section, field)
 
-    pubDate = ET.SubElement(self.rss, "pubDate")
+    pubDate = ET.SubElement(self.channel, "pubDate")
     pubDate.text = formatdate()
 
     # iTunes stuff
-    self.image = ET.SubElement(self.rss, "itunes:image")
+    self.image = ET.SubElement(self.channel, "itunes:image")
     self.image.set("href", config.get("iTunes", "image"))
-    self.category = ET.SubElement(self.rss, "itunes:category")
+    self.category = ET.SubElement(self.channel, "itunes:category")
     self.category.set("text", config.get("iTunes", "category"))
-    self.owner = ET.SubElement(self.rss, "itunes:owner")
+    self.owner = ET.SubElement(self.channel, "itunes:owner")
     self.owner_email = ET.SubElement(self.owner, "itunes:email")
     self.owner_email.text = config.get("iTunes", "owner_email")
     self.owner_name = ET.SubElement(self.owner, "itunes:name")
     self.owner_name.text = config.get("iTunes", "owner_name")
     
-    # The items element contains the podcast episodes.
-    self.items = ET.SubElement(self.rss, "items")
-
-    url = config.get("general", "url")
+    audio_base_url = config.get("general", "url")
 
     # Processing the audio files.
     for rel_f in sorted(os.listdir(self.input_dir)):
@@ -72,17 +69,17 @@ class Podcast(object):
         basename = os.path.split(f)[1]
         fr = tagpy.FileRef(f)
         t = fr.tag()
-        item = ET.SubElement(self.items, "item")
+        item = ET.SubElement(self.channel, "item")
         title = ET.SubElement(item, "title")
         title.text = t.title
         link = ET.SubElement(item, "link")
-        link.text = url + "/" + basename
+        link.text = audio_base_url + "/" + basename
         guid = ET.SubElement(item, "guid")
         guid.text = link.text
         desc = ET.SubElement(item, "description")
         desc.text = "by " + t.artist + " (%s)" % basename
         enc = ET.SubElement(item, "enclosure")
-        enc.set("url", url + "/" + basename)
+        enc.set("url", audio_base_url + "/" + basename)
         enc.set("length", unicode(st.st_size))
         enc.set("type", "audio/mpeg")
         cat = ET.SubElement(item, "category")
