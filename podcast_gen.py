@@ -20,7 +20,7 @@ class Podcast(object):
   CHANNEL_FIELDS = {
       "channel": ('title', 'description', 'link', 'language',
                   'webMaster', 'docs', ),
-      "iTunes": ('author', 'subtitle', 'summary'),
+      "iTunes": ('author', 'subtitle', 'summary', 'explicit'),
   }
   def __init__(self, config_fn):
     config = ConfigParser.SafeConfigParser()
