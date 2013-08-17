@@ -62,7 +62,13 @@ class Podcast(object):
     audio_base_host = config.get("general", "base_host")
     audio_base_url = config.get("general", "base_url")
 
-    # Processing the audio files.
+    # Episodes are traditionally sorted by date. In this case, we're
+    # only interested in sorting them the way they are sorted in the
+    # directory, and we're faking the dates. To making obvious that the
+    # dates are fake, we're setting the year to 1970.
+    base_time = datetime.datetime(1970, 1, 1)
+    td = datetime.timedelta(1, 0, 0)
+    count = 0
     for rel_f in sorted(os.listdir(self.input_dir)):
       f = os.path.join(self.input_dir, rel_f)
       # TODO: better support for file types
@@ -92,7 +98,8 @@ class Podcast(object):
         cat.text = "Podcasts"
         # pubDate is based on the last file change time.
         pubDate = ET.SubElement(item, "pubDate")
-        pubDate.text = formatdate(st.st_ctime)
+        pubDate.text = str(base_time + count * td)
+        count += 1
 
   def Print(self, pretty=False):
     # This rewriting is a bit silly, but elementtree does not have a pretty
