@@ -70,16 +70,16 @@ class Podcast(object):
     td = datetime.timedelta(1, 0, 0)
     count = 0
     for rel_f in sorted(os.listdir(self.input_dir)):
-      f = os.path.join(self.input_dir, rel_f)
+      abs_file_path = os.path.join(self.input_dir, rel_f)
       # TODO: better support for file types
-      if f.endswith(".mp3"):
-        st = os.stat(f)
-        basename = os.path.split(f)[1]
-        fr = tagpy.FileRef(f)
-        t = fr.tag()
+      if abs_file_path.endswith(".mp3"):
+        st = os.stat(abs_file_path)
+        basename = os.path.basename(abs_file_path)
+        fr = tagpy.FileRef(abs_file_path)
+        audio_tag = fr.tag()
         item = ET.SubElement(self.channel, "item")
         title = ET.SubElement(item, "title")
-        title.text = t.title
+        title.text = audio_tag.title
         link = ET.SubElement(item, "link")
         audio_url = (
             "http://"
@@ -89,7 +89,7 @@ class Podcast(object):
         guid = ET.SubElement(item, "guid")
         guid.text = link.text
         desc = ET.SubElement(item, "description")
-        desc.text = "by " + t.artist + " (%s)" % basename
+        desc.text = "by " + audio_tag.artist + " (%s)" % basename
         enc = ET.SubElement(item, "enclosure")
         enc.set("url", audio_url)
         enc.set("length", unicode(st.st_size))
