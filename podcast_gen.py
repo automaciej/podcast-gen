@@ -75,6 +75,7 @@ class Podcast(object):
       if abs_file_path.endswith(".mp3"):
         st = os.stat(abs_file_path)
         basename = os.path.basename(abs_file_path)
+        basename_u = unicode(basename, 'utf-8')
         fr = tagpy.FileRef(abs_file_path)
         audio_tag = fr.tag()
         item = ET.SubElement(self.channel, "item")
@@ -89,7 +90,7 @@ class Podcast(object):
         guid = ET.SubElement(item, "guid")
         guid.text = link.text
         desc = ET.SubElement(item, "description")
-        desc.text = "by " + audio_tag.artist + " (%s)" % basename
+        desc.text = "by " + audio_tag.artist + u" (%s)" % basename_u
         enc = ET.SubElement(item, "enclosure")
         enc.set("url", audio_url)
         enc.set("length", unicode(st.st_size))
