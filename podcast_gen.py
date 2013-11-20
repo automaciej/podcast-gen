@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 #
-# Podcast structure based on:
+# Podcast feed structure based on:
 # http://www.podcast411.com/howto_1.html
 
 from xml.etree import ElementTree as ET
@@ -24,11 +24,16 @@ class Podcast(object):
       "iTunes": ('author', 'subtitle', 'summary', 'explicit'),
   }
   def __init__(self, config_fn):
-    config = ConfigParser.SafeConfigParser()
-    config.read(config_fn)
+    self.config = ConfigParser.SafeConfigParser()
+    self.config.read(config_fn)
 
-    self.input_dir = config.get("general", "input_dir")
-    self.output_file = config.get("general", "output_file")
+    self.input_dir = self.config.get("general", "input_dir")
+    self.output_file = self.config.get("general", "output_file")
+
+  def _IsThisAnAudioFile(self, abs_path):
+    return abs_path.endswith(".mp3")
+
+  def Process(self):
     self.rss = ET.Element("rss")
     self.rss.set(
         "xmlns:itunes",
@@ -38,7 +43,7 @@ class Podcast(object):
     for section, prefix in (("channel", ""), ("iTunes", "itunes:")):
       for field in self.CHANNEL_FIELDS[section]:
         try:
-          content = config.get(section, field)
+          content = self.config.get(section, field)
           content = unicode(content, "utf-8")
           e = ET.SubElement(self.channel, "%s%s" % (prefix, field))
           e.text = content
@@ -50,17 +55,17 @@ class Podcast(object):
 
     # iTunes stuff
     self.image = ET.SubElement(self.channel, "itunes:image")
-    self.image.set("href", config.get("iTunes", "image"))
+    self.image.set("href", self.config.get("iTunes", "image"))
     self.category = ET.SubElement(self.channel, "itunes:category")
-    self.category.set("text", config.get("iTunes", "category"))
+    self.category.set("text", self.config.get("iTunes", "category"))
     self.owner = ET.SubElement(self.channel, "itunes:owner")
     self.owner_email = ET.SubElement(self.owner, "itunes:email")
-    self.owner_email.text = config.get("iTunes", "owner_email")
+    self.owner_email.text = self.config.get("iTunes", "owner_email")
     self.owner_name = ET.SubElement(self.owner, "itunes:name")
-    self.owner_name.text = config.get("iTunes", "owner_name")
-    
-    audio_base_host = config.get("general", "base_host")
-    audio_base_url = config.get("general", "base_url")
+    self.owner_name.text = self.config.get("iTunes", "owner_name")
+
+    audio_base_host = self.config.get("general", "base_host")
+    audio_base_url = self.config.get("general", "base_url")
 
     # Episodes are traditionally sorted by date. In this case, we're
     # only interested in sorting them the way they are sorted in the
@@ -72,7 +77,7 @@ class Podcast(object):
     for rel_f in sorted(os.listdir(self.input_dir)):
       abs_file_path = os.path.join(self.input_dir, rel_f)
       # TODO: better support for file types
-      if abs_file_path.endswith(".mp3"):
+      if self._IsThisAnAudioFile(abs_file_path):
         st = os.stat(abs_file_path)
         basename = os.path.basename(abs_file_path)
         basename_u = unicode(basename, 'utf-8')
@@ -102,16 +107,25 @@ class Podcast(object):
         pubDate.text = str(base_time + count * td)
         count += 1
 
-  def Print(self, pretty=False):
+    if not count:
+      logging.warning('No .mp3 files found.')
+
+  def _PrettifyXmlString(self, xml_as_string):
     # This rewriting is a bit silly, but elementtree does not have a pretty
     # print function.
-    s = ET.tostring(self.rss, encoding="UTF-8")
+    x = xml.dom.minidom.parseString(xml_as_string)
+    xml_as_string = x.toprettyxml()
+    xml_as_string = xml_as_string.encode("utf-8")
+    return xml_as_string
+
+  def Write(self, pretty=False):
+    serialized = ET.tostring(self.rss, encoding="UTF-8")
+
     if pretty:
-      x = xml.dom.minidom.parseString(s)
-      s = x.toprettyxml()
-      s = s.encode("utf-8")
+      serialized = self._PrettifyXmlString(serialized)
+
     with open(self.output_file, "w") as fd:
-      fd.write(s)
+      fd.write(serialized)
 
 
 def main():
@@ -123,7 +137,8 @@ def main():
                     help="Generate pretty XML")
   options, args = parser.parse_args()
   p = Podcast(options.config_file)
-  p.Print(options.pretty)
+  p.Process()
+  p.Write(options.pretty)
 
 
 if __name__ == '__main__':
