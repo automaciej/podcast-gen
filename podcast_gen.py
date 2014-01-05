@@ -4,17 +4,17 @@
 # Podcast feed structure based on:
 # http://www.podcast411.com/howto_1.html
 
-from xml.etree import ElementTree as ET
-import xml.dom.minidom
-import StringIO
-import optparse
-import ConfigParser
-import logging
-import os
-import tagpy
 from email.utils import formatdate
+from xml.etree import ElementTree as ET
+import ConfigParser
 import datetime
+import logging
+import optparse
+import os
+import StringIO
+import tagpy
 import urllib
+import xml.dom.minidom
 
 class Podcast(object):
 
