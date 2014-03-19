@@ -13,8 +13,16 @@ import optparse
 import os
 import StringIO
 import tagpy
+import time
 import urllib
 import xml.dom.minidom
+
+
+def GenPubDate(dtime):
+  tpl = dtime.timetuple()
+  ts = time.mktime(tpl)
+  return formatdate(ts)
+
 
 class Podcast(object):
 
@@ -67,18 +75,11 @@ class Podcast(object):
     audio_base_host = self.config.get("general", "base_host")
     audio_base_url = self.config.get("general", "base_url")
 
-    # Episodes are traditionally sorted by date. In this case, we're
-    # only interested in sorting them the way they are sorted in the
-    # directory, and we're faking the dates. To making obvious that the
-    # dates are fake, we're setting the year to 1970.
-    base_time = datetime.datetime(1970, 1, 1)
-    td = datetime.timedelta(1, 0, 0)
     count = 0
     for rel_f in sorted(os.listdir(self.input_dir)):
       abs_file_path = os.path.join(self.input_dir, rel_f)
       # TODO: better support for file types
       if self._IsThisAnAudioFile(abs_file_path):
-        st = os.stat(abs_file_path)
         basename = os.path.basename(abs_file_path)
         basename_u = unicode(basename, 'utf-8')
         fr = tagpy.FileRef(abs_file_path)
@@ -98,13 +99,14 @@ class Podcast(object):
         desc.text = "by " + audio_tag.artist + u" (%s)" % basename_u
         enc = ET.SubElement(item, "enclosure")
         enc.set("url", audio_url)
+        st = os.stat(abs_file_path)
         enc.set("length", unicode(st.st_size))
         enc.set("type", "audio/mpeg")
         cat = ET.SubElement(item, "category")
         cat.text = "Podcasts"
         # pubDate is based on the last file change time.
         pubDate = ET.SubElement(item, "pubDate")
-        pubDate.text = str(base_time + count * td)
+        pubDate.text = GenPubDate(datetime.datetime.fromtimestamp(st.st_mtime))
         count += 1
 
     if not count:
