@@ -87,14 +87,15 @@ class Podcast(object):
         item = ET.SubElement(self.channel, "item")
         title = ET.SubElement(item, "title")
         title.text = audio_tag.title
-        link = ET.SubElement(item, "link")
         audio_url = (
             "http://"
             + audio_base_host
             + urllib.quote(audio_base_url + "/" + basename))
-        link.text = audio_url
+        # If we wanted to link to a page describing this file.
+        # link = ET.SubElement(item, "link")
+        # link.text = audio_url
         guid = ET.SubElement(item, "guid")
-        guid.text = link.text
+        guid.text = audio_url
         desc = ET.SubElement(item, "description")
         desc.text = "by " + audio_tag.artist + u" (%s)" % basename_u
         enc = ET.SubElement(item, "enclosure")
