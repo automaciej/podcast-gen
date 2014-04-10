@@ -9,10 +9,10 @@ from xml.etree import ElementTree as ET
 import ConfigParser
 import datetime
 import logging
+import mutagen.id3
 import optparse
 import os
 import StringIO
-import tagpy
 import time
 import urllib
 import xml.dom.minidom
@@ -22,6 +22,25 @@ def GenPubDate(dtime):
   tpl = dtime.timetuple()
   ts = time.mktime(tpl)
   return formatdate(ts)
+
+
+def FormatDescription(tag):
+  """The MP3 file might have a comment field and/or a description field.
+  """
+  description = None
+  comment = None
+  if 'TXXX:DESCRIPTION' in tag:
+    description = '\n'.join(tag['TXXX:DESCRIPTION'].text)
+  if 'TXXX:COMMENT' in tag:
+    comment = '\n'.join(tag['TXXX:COMMENT'].text)
+  if description and comment and description == comment:
+    return description
+  elif description:
+    return description
+  elif comment:
+    return comment
+  else:
+    return ''
 
 
 class Podcast(object):
@@ -82,11 +101,11 @@ class Podcast(object):
       if self._IsThisAnAudioFile(abs_file_path):
         basename = os.path.basename(abs_file_path)
         basename_u = unicode(basename, 'utf-8')
-        fr = tagpy.FileRef(abs_file_path)
-        audio_tag = fr.tag()
+        id3tag = mutagen.id3.Open(abs_file_path)
         item = ET.SubElement(self.channel, "item")
         title = ET.SubElement(item, "title")
-        title.text = audio_tag.title
+        if 'TIT2' in id3tag:
+          title.text = ' '.join(id3tag['TIT2'].text)
         audio_url = (
             "http://"
             + audio_base_host
@@ -96,8 +115,15 @@ class Podcast(object):
         # link.text = audio_url
         guid = ET.SubElement(item, "guid")
         guid.text = audio_url
-        desc = ET.SubElement(item, "description")
-        desc.text = "by " + audio_tag.artist + u" (%s)" % basename_u
+        desc_tag = ET.SubElement(item, "description")
+        description = []
+        desc_from_tag = FormatDescription(id3tag)
+        if desc_from_tag:
+          description.append(desc_from_tag)
+        if 'TPE1' in id3tag:
+          description.append('(by %s)' % ' '.join(id3tag['TPE1'].text))
+        description.append(u'(file name: %s)' % basename_u)
+        desc_tag.text = '\n'.join(description)
         enc = ET.SubElement(item, "enclosure")
         enc.set("url", audio_url)
         st = os.stat(abs_file_path)
@@ -105,7 +131,7 @@ class Podcast(object):
         enc.set("type", "audio/mpeg")
         cat = ET.SubElement(item, "category")
         cat.text = "Podcasts"
-        # pubDate is based on the last file change time.
+        # pubDate is based on the last file modification time.
         pubDate = ET.SubElement(item, "pubDate")
         pubDate.text = GenPubDate(datetime.datetime.fromtimestamp(st.st_mtime))
         count += 1
