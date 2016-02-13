@@ -57,6 +57,17 @@ def FormatDescription(tag):
     return ''
 
 
+def _GetPathAfterPublicHtml(p):
+  accumulator = []
+  while True:
+    head, tail = os.path.split(p)
+    if tail == 'public_html':
+      break
+    accumulator.insert(0, tail)
+    p = head
+  return os.path.join(*accumulator)
+
+
 def ComposeConfig(local_path, base_host, username):
   """Returns a ConfigParser object with a guessed config.
 
@@ -67,20 +78,21 @@ def ComposeConfig(local_path, base_host, username):
     directory: A directory on local disk with mp3 files.
   """
   base_dir_name = os.path.split(local_path)[1]
+  under_public_html = _GetPathAfterPublicHtml(local_path)
   config = {'general': {}, 'channel': {}, 'iTunes': {}}
   config['general']['input_dir'] = local_path
   config['general']['output_file'] = os.path.join(local_path, 'feed.xml')
   config['general']['base_host'] = base_host
   config['general']['base_url_path'] = '/~%s/%s' % (username,
-      base_dir_name)
+      under_public_html)
   config['general']['base_url'] = 'http://%s/~%s/%s' % (
-      base_host, username, base_dir_name)
+      base_host, username, under_public_html)
   config['general']['feed_url'] = config['general']['base_url'] + '/feed.xml'
   config['channel']['title'] = base_dir_name.title()
   config['channel']['description'] = 'Podcast generated from %r' % local_path
   # What if the file doesn't exist?
   config['iTunes']['image'] = 'http://%s/~%s/%s/cover.jpg' % (
-      base_host, username, base_dir_name)
+      base_host, username, under_public_html)
   return config
 
 
