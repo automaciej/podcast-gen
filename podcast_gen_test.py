@@ -58,6 +58,10 @@ class PodcastGenUnitTest(unittest.TestCase):
     self.assertEqual('foo/bar',
         podcast_gen._GetPathAfterPublicHtml('/home/joe/public_html/foo/bar'))
 
+  def testGetPathAfterPublicHtmlNoPublicHtml(self):
+    self.assertEqual('/home/joe/missing/foo/bar',
+        podcast_gen._GetPathAfterPublicHtml('/home/joe/missing/foo/bar'))
+
 
 if __name__ == '__main__':
   unittest.main()

@@ -58,6 +58,8 @@ def FormatDescription(tag):
 
 
 def _GetPathAfterPublicHtml(p):
+  if 'public_html' not in p:
+    return p
   accumulator = []
   while True:
     head, tail = os.path.split(p)
