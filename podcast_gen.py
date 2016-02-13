@@ -224,10 +224,14 @@ def main():
       default=False,
       action='store_true',
       help="Generate pretty XML")
+  parser.add_argument("--title", help="Podcast title", default="")
   args = parser.parse_args()
   host_name = socket.getfqdn()
   username = getpass.getuser()
-  config = ComposeConfig(args.input_dir, host_name, username)
+  input_dir = os.path.abspath(args.input_dir)
+  config = ComposeConfig(input_dir, host_name, username)
+  if args.title:
+    config['channel']['title'] = args.title
   p = Podcast(config)
   p.Process()
   p.Write(args.pretty)
