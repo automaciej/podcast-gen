@@ -1,32 +1,46 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # coding: utf-8
+# vim:set ts=2 sts=2 sw=2:
 #
 # Podcast feed structure based on:
 # http://www.podcast411.com/howto_1.html
 
+"""Podcast generator: Point it at a directory with MP3 files.
+
+The tool is intended to generate podcasts in subdirectories of public_html and
+it can be used with no configuration.
+
+TODO: Better support for different file types: _IsThisAnAudioFile
+"""
+
 from email.utils import formatdate
 from xml.etree import ElementTree as ET
-import ConfigParser
+import argparse
 import datetime
+import getpass
 import logging
 import mutagen.id3
-import optparse
 import os
-import StringIO
+import socket
 import time
-import urllib
+import urllib.parse
 import xml.dom.minidom
+
+CHANNEL_FIELDS = {
+    "channel": ('title', 'description', 'link', 'language',
+                'webMaster', 'docs', ),
+    "iTunes": ('author', 'subtitle', 'summary', 'explicit'),
+}
 
 
 def GenPubDate(dtime):
   tpl = dtime.timetuple()
-  ts = time.mktime(tpl)
-  return formatdate(ts)
+  timestamp = time.mktime(tpl)
+  return formatdate(timestamp)
 
 
 def FormatDescription(tag):
-  """The MP3 file might have a comment field and/or a description field.
-  """
+  """The MP3 file might have a comment field and/or a description field."""
   description = None
   comment = None
   if 'TXXX:DESCRIPTION' in tag:
@@ -43,73 +57,97 @@ def FormatDescription(tag):
     return ''
 
 
+def ComposeConfig(local_path, base_host, username):
+  """Returns a ConfigParser object with a guessed config.
+
+  Ideally this function won't access the machine, but only compose
+  a configuration based on a set of input fields.
+
+  Args:
+    directory: A directory on local disk with mp3 files.
+  """
+  base_dir_name = os.path.split(local_path)[1]
+  config = {'general': {}, 'channel': {}, 'iTunes': {}}
+  config['general']['input_dir'] = local_path
+  config['general']['output_file'] = os.path.join(local_path, 'feed.xml')
+  config['general']['base_host'] = base_host
+  config['general']['base_url_path'] = '/~%s/%s' % (username,
+      base_dir_name)
+  config['general']['base_url'] = 'http://%s/~%s/%s' % (
+      base_host, username, base_dir_name)
+  config['general']['feed_url'] = config['general']['base_url'] + '/feed.xml'
+  config['channel']['title'] = base_dir_name.title()
+  config['channel']['description'] = 'Podcast generated from %r' % local_path
+  # What if the file doesn't exist?
+  config['iTunes']['image'] = 'http://%s/~%s/%s/cover.jpg' % (
+      base_host, username, base_dir_name)
+  return config
+
+
 class Podcast(object):
+  """Represents a podcast."""
 
-  CHANNEL_FIELDS = {
-      "channel": ('title', 'description', 'link', 'language',
-                  'webMaster', 'docs', ),
-      "iTunes": ('author', 'subtitle', 'summary', 'explicit'),
-  }
-  def __init__(self, config_fn):
-    self.config = ConfigParser.SafeConfigParser()
-    self.config.read(config_fn)
+  def __init__(self, config):
+    self.config = config
 
-    self.input_dir = self.config.get("general", "input_dir")
-    self.output_file = self.config.get("general", "output_file")
+    self.input_dir = self.config["general"]["input_dir"]
+    self.output_file = self.config["general"]["output_file"]
+    self.rss = None
 
   def _IsThisAnAudioFile(self, abs_path):
     return abs_path.endswith(".mp3")
 
-  def Process(self):
-    self.rss = ET.Element("rss")
-    self.rss.set(
+  def GetBaseEtree(self, config):
+    """Compose the base Etree with everything except the specific episodes."""
+    rss = ET.Element("rss")
+    rss.set(
         "xmlns:itunes",
         "http://www.itunes.com/dtds/podcast-1.0.dtd")
-    self.rss.set("version", "2.0")
-    self.channel = ET.SubElement(self.rss, "channel")
+    rss.set("version", "2.0")
+    channel = ET.SubElement(rss, "channel")
     for section, prefix in (("channel", ""), ("iTunes", "itunes:")):
-      for field in self.CHANNEL_FIELDS[section]:
-        try:
-          content = self.config.get(section, field)
-          content = unicode(content, "utf-8")
-          e = ET.SubElement(self.channel, "%s%s" % (prefix, field))
+      for field in CHANNEL_FIELDS[section]:
+        content = config[section].get(field)
+        if content is not None:
+          e = ET.SubElement(channel, "%s%s" % (prefix, field))
           e.text = content
-        except ConfigParser.NoOptionError as e:
-          logging.warning("Field %s.%s not found", section, field)
-
-    pubDate = ET.SubElement(self.channel, "pubDate")
+    pubDate = ET.SubElement(channel, "pubDate")
     pubDate.text = formatdate()
 
     # iTunes stuff
-    self.image = ET.SubElement(self.channel, "itunes:image")
-    self.image.set("href", self.config.get("iTunes", "image"))
-    self.category = ET.SubElement(self.channel, "itunes:category")
-    self.category.set("text", self.config.get("iTunes", "category"))
-    self.owner = ET.SubElement(self.channel, "itunes:owner")
-    self.owner_email = ET.SubElement(self.owner, "itunes:email")
-    self.owner_email.text = self.config.get("iTunes", "owner_email")
-    self.owner_name = ET.SubElement(self.owner, "itunes:name")
-    self.owner_name.text = self.config.get("iTunes", "owner_name")
+    image = ET.SubElement(channel, "itunes:image")
+    image.set("href", config["iTunes"].get("image"))
+    category = ET.SubElement(channel, "itunes:category")
+    category.set("text", config["iTunes"].get("category") or 'Uncategorized')
+    owner = ET.SubElement(channel, "itunes:owner")
+    owner_email = ET.SubElement(owner, "itunes:email")
+    owner_email.text = config["iTunes"].get("owner_email") or 'no email'
+    owner_name = ET.SubElement(owner, "itunes:name")
+    owner_name.text = config["iTunes"].get("owner_name") or 'no owner name'
 
-    audio_base_host = self.config.get("general", "base_host")
-    audio_base_url = self.config.get("general", "base_url")
+    return rss
+
+  def Process(self):
+    self.rss = self.GetBaseEtree(self.config)
+    channel = self.rss.find('channel')
+    audio_base_host = self.config["general"]["base_host"]
+    audio_base_url = self.config["general"]["base_url_path"]
 
     count = 0
     for rel_f in sorted(os.listdir(self.input_dir)):
       abs_file_path = os.path.join(self.input_dir, rel_f)
-      # TODO: better support for file types
       if self._IsThisAnAudioFile(abs_file_path):
+        logging.info('Adding %r to the feed', abs_file_path)
         basename = os.path.basename(abs_file_path)
-        basename_u = unicode(basename, 'utf-8')
         id3tag = mutagen.id3.Open(abs_file_path)
-        item = ET.SubElement(self.channel, "item")
+        item = ET.SubElement(channel, "item")
         title = ET.SubElement(item, "title")
         if 'TIT2' in id3tag:
           title.text = ' '.join(id3tag['TIT2'].text)
         audio_url = (
             "http://"
             + audio_base_host
-            + urllib.quote(audio_base_url + "/" + basename))
+            + urllib.parse.quote(audio_base_url + "/" + basename))
         # If we wanted to link to a page describing this file.
         # link = ET.SubElement(item, "link")
         # link.text = audio_url
@@ -122,52 +160,64 @@ class Podcast(object):
           description.append(desc_from_tag)
         if 'TPE1' in id3tag:
           description.append('(by %s)' % ' '.join(id3tag['TPE1'].text))
-        description.append(u'(file name: %s)' % basename_u)
+        description.append(u'(file name: %s)' % basename)
         desc_tag.text = '\n'.join(description)
         enc = ET.SubElement(item, "enclosure")
         enc.set("url", audio_url)
-        st = os.stat(abs_file_path)
-        enc.set("length", unicode(st.st_size))
+        stat_info = os.stat(abs_file_path)
+        enc.set("length", str(stat_info.st_size))
         enc.set("type", "audio/mpeg")
         cat = ET.SubElement(item, "category")
         cat.text = "Podcasts"
         # pubDate is based on the last file modification time.
         pubDate = ET.SubElement(item, "pubDate")
-        pubDate.text = GenPubDate(datetime.datetime.fromtimestamp(st.st_mtime))
+        pubDate.text = GenPubDate(datetime.datetime.fromtimestamp(
+            stat_info.st_mtime))
         count += 1
 
     if not count:
       logging.warning('No .mp3 files found.')
 
   def _PrettifyXmlString(self, xml_as_string):
+    """Prettify an XML string."""
     # This rewriting is a bit silly, but elementtree does not have a pretty
     # print function.
-    x = xml.dom.minidom.parseString(xml_as_string)
-    xml_as_string = x.toprettyxml()
+    xml_tree = xml.dom.minidom.parseString(xml_as_string)
+    xml_as_string = xml_tree.toprettyxml()
     xml_as_string = xml_as_string.encode("utf-8")
     return xml_as_string
 
   def Write(self, pretty=False):
+    """Write podcast feed to disk."""
     serialized = ET.tostring(self.rss, encoding="UTF-8")
 
     if pretty:
       serialized = self._PrettifyXmlString(serialized)
 
-    with open(self.output_file, "w") as fd:
-      fd.write(serialized)
+    with open(self.output_file, "w") as file_descriptor:
+      logging.info('Writing to %r', self.output_file)
+      file_descriptor.write(str(serialized.decode('utf-8')))
+
+  def GetFeedUrl(self):
+    return self.config['general']['feed_url']
 
 
 def main():
   logging.basicConfig(level=logging.DEBUG)
-  parser = optparse.OptionParser()
-  parser.add_option("-c", "--config", dest="config_file")
-  parser.add_option("-p", "--pretty", dest="pretty",
-                    default=False, action="store_true",
-                    help="Generate pretty XML")
-  options, args = parser.parse_args()
-  p = Podcast(options.config_file)
+  parser = argparse.ArgumentParser()
+  parser.add_argument("input_dir")
+  parser.add_argument("-p", "--pretty",
+      default=False,
+      action='store_true',
+      help="Generate pretty XML")
+  args = parser.parse_args()
+  host_name = socket.getfqdn()
+  username = getpass.getuser()
+  config = ComposeConfig(args.input_dir, host_name, username)
+  p = Podcast(config)
   p.Process()
-  p.Write(options.pretty)
+  p.Write(args.pretty)
+  logging.info('Feed URL: %r', p.GetFeedUrl())
 
 
 if __name__ == '__main__':
