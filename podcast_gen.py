@@ -31,7 +31,7 @@ CHANNEL_FIELDS = {
                 'webMaster', 'docs', ),
     "iTunes": ('author', 'subtitle', 'summary', 'explicit'),
 }
-
+DEFAULT_FEED_NAME = 'feed.xml'
 
 def GenPubDate(dtime):
   tpl = dtime.timetuple()
@@ -83,13 +83,14 @@ def ComposeConfig(local_path, base_host, username):
   under_public_html = _GetPathAfterPublicHtml(local_path)
   config = {'general': {}, 'channel': {}, 'iTunes': {}}
   config['general']['input_dir'] = local_path
-  config['general']['output_file'] = os.path.join(local_path, 'feed.xml')
+  config['general']['output_file'] = os.path.join(local_path, DEFAULT_FEED_NAME)
   config['general']['base_host'] = base_host
   config['general']['base_url_path'] = '/~%s/%s' % (username,
       under_public_html)
   config['general']['base_url'] = 'http://%s/~%s/%s' % (
       base_host, username, under_public_html)
-  config['general']['feed_url'] = config['general']['base_url'] + '/feed.xml'
+  config['general']['feed_url'] = (
+      config['general']['base_url'] + '/' + DEFAULT_FEED_NAME)
   config['channel']['title'] = base_dir_name.title()
   config['channel']['description'] = 'Podcast generated from %r' % local_path
   # What if the file doesn't exist?
@@ -221,9 +222,9 @@ def main():
   parser = argparse.ArgumentParser()
   parser.add_argument("input_dir")
   parser.add_argument("-p", "--pretty",
-      default=False,
-      action='store_true',
-      help="Generate pretty XML")
+                      default=False,
+                      action='store_true',
+                      help="Generate pretty XML")
   parser.add_argument("--title", help="Podcast title", default="")
   args = parser.parse_args()
   host_name = socket.getfqdn()
