@@ -142,27 +142,47 @@ class Podcast(object):
 
     return rss
 
+  def GetMetadata(self, abs_file_path):
+    metadata = {
+        'title': os.path.split(abs_file_path)[1],
+        'description': None,
+        'artist': None,
+    }
+    try:
+      id3tag = mutagen.id3.Open(abs_file_path)
+    except mutagen.id3._util.ID3NoHeaderError as exc:
+      logging.warning("Couldn't read %r", abs_file_path)
+      return metadata
+    desc_from_tag = FormatDescription(id3tag)
+    if desc_from_tag:
+      metadata['description'] = desc_from_tag
+    if 'TPE1' in id3tag:
+      metadata['artist'] = ' '.join(id3tag['TPE1'].text)
+    if 'TIT2' in id3tag:
+      metadata['title'] = ' '.join(id3tag['TIT2'].text)
+    return metadata
+
   def Process(self):
     self.rss = self.GetBaseEtree(self.config)
     channel = self.rss.find('channel')
     audio_base_host = self.config["general"]["base_host"]
-    audio_base_url = self.config["general"]["base_url_path"]
+    audio_base_url_path = self.config["general"]["base_url_path"]
 
     count = 0
     for rel_f in sorted(os.listdir(self.input_dir)):
       abs_file_path = os.path.join(self.input_dir, rel_f)
       if self._IsThisAnAudioFile(abs_file_path):
         logging.info('Adding %r to the feed', abs_file_path)
+        metadata = self.GetMetadata(abs_file_path)
         basename = os.path.basename(abs_file_path)
-        id3tag = mutagen.id3.Open(abs_file_path)
         item = ET.SubElement(channel, "item")
         title = ET.SubElement(item, "title")
-        if 'TIT2' in id3tag:
-          title.text = ' '.join(id3tag['TIT2'].text)
+        if metadata['title']:
+          title.text = metadata['title']
         audio_url = (
             "http://"
             + audio_base_host
-            + urllib.parse.quote(audio_base_url + "/" + basename))
+            + urllib.parse.quote(audio_base_url_path + "/" + basename))
         # If we wanted to link to a page describing this file.
         # link = ET.SubElement(item, "link")
         # link.text = audio_url
@@ -170,11 +190,10 @@ class Podcast(object):
         guid.text = audio_url
         desc_tag = ET.SubElement(item, "description")
         description = []
-        desc_from_tag = FormatDescription(id3tag)
-        if desc_from_tag:
-          description.append(desc_from_tag)
-        if 'TPE1' in id3tag:
-          description.append('(by %s)' % ' '.join(id3tag['TPE1'].text))
+        if metadata['description']:
+          description.append(metadata['description'])
+        if metadata['artist']:
+          description.append('(by %s)' % metadata['artist'])
         description.append(u'(file name: %s)' % basename)
         desc_tag.text = '\n'.join(description)
         enc = ET.SubElement(item, "enclosure")
