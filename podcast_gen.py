@@ -109,7 +109,7 @@ class Podcast(object):
     self.rss = None
 
   def _IsThisAnAudioFile(self, abs_path):
-    return abs_path.endswith(".mp3")
+    return any(abs_path.endswith(x) for x in (".mp3", ".m4a"))
 
   def GetBaseEtree(self, config):
     """Compose the base Etree with everything except the specific episodes."""
