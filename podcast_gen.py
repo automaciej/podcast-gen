@@ -245,17 +245,30 @@ def main():
                       action='store_true',
                       help="Generate pretty XML")
   parser.add_argument("--title", help="Podcast title", default="")
+  parser.add_argument("--base_url", default="",
+                      help=("Base URL of the directory as viewed from the "
+                            "Internet, like http://example.com/foo/bar. This "
+                            "option is useful when the feed is generated on a "
+                            "different host than the serving host."))
   args = parser.parse_args()
-  host_name = socket.getfqdn()
   username = getpass.getuser()
   input_dir = os.path.abspath(args.input_dir)
+  host_name = socket.getfqdn()
   config = ComposeConfig(input_dir, host_name, username)
   if args.title:
     config['channel']['title'] = args.title
-  p = Podcast(config)
-  p.Process()
-  p.Write(args.pretty)
-  logging.info('Feed URL: %r', p.GetFeedUrl())
+  if args.base_url:
+    parsed_url = urllib.parse.urlparse(args.base_url)
+    config['general']['base_url_path'] = parsed_url.path
+    config['general']['base_url'] = args.base_url
+    config['general']['feed_url'] = args.base_url + '/' + DEFAULT_FEED_NAME
+    config['general']['base_host'] = parsed_url.netloc
+    config['general']['image'] = args.base_url + '/cover.jpg'
+  podcast = Podcast(config)
+  podcast.Process()
+  podcast.Write(args.pretty)
+  feed_url = podcast.GetFeedUrl()
+  logging.info('Feed URL: %r', feed_url)
 
 
 if __name__ == '__main__':
