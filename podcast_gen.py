@@ -5,13 +5,16 @@
 # Podcast feed structure based on:
 # http://www.podcast411.com/howto_1.html
 
-"""Podcast generator: Point it at a directory with MP3 files.
+"""A simple podcast generator.
 
-The tool is intended to generate podcasts in subdirectories of public_html and
-it can be used with no configuration.
+Usage: create a directory with .mp3 files and a cover.jpg file. Run the tool,
+pointing it at the directory. Pass it the base URL of this directory as viewed
+via HTTP.
 
-TODO: Better support for different file types: _IsThisAnAudioFile
+The tool can be used with no --base_url if the directory with mp3 files is one
+like ~/public_html/FooPodcast.
 """
+# TODO: Better support for different file types: _IsThisAnAudioFile
 
 from email.utils import formatdate
 from xml.etree import ElementTree as ET
@@ -22,6 +25,7 @@ import logging
 import mutagen.id3
 import os
 import socket
+import sys
 import time
 import urllib.parse
 import xml.dom.minidom
@@ -238,7 +242,9 @@ class Podcast(object):
 
 def main():
   logging.basicConfig(level=logging.DEBUG)
-  parser = argparse.ArgumentParser()
+  parser = argparse.ArgumentParser(
+      description=__doc__,
+      formatter_class=argparse.RawDescriptionHelpFormatter)
   parser.add_argument("input_dir")
   parser.add_argument("-p", "--pretty",
                       default=False,
@@ -253,6 +259,10 @@ def main():
   args = parser.parse_args()
   username = getpass.getuser()
   input_dir = os.path.abspath(args.input_dir)
+  if 'public_html' not in input_dir and not args.base_url:
+    print('You either need to pass a directory like '
+          '~/public_html/foo, or you need to pass --base_url.')
+    sys.exit(1)
   host_name = socket.getfqdn()
   config = ComposeConfig(input_dir, host_name, username)
   if args.title:
