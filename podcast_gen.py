@@ -85,8 +85,7 @@ def ComposeConfig(local_path, base_host, username):
   config['general']['input_dir'] = local_path
   config['general']['output_file'] = os.path.join(local_path, DEFAULT_FEED_NAME)
   config['general']['base_host'] = base_host
-  config['general']['base_url_path'] = '/~%s/%s' % (username,
-      under_public_html)
+  config['general']['base_url_path'] = '/~%s/%s' % (username, under_public_html)
   config['general']['base_url'] = 'http://%s/~%s/%s' % (
       base_host, username, under_public_html)
   config['general']['feed_url'] = (
@@ -233,6 +232,7 @@ class Podcast(object):
       file_descriptor.write(str(serialized.decode('utf-8')))
 
   def GetFeedUrl(self):
+    """Returns the external URL of the feed."""
     return self.config['general']['feed_url']
 
 
