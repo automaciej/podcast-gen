@@ -74,7 +74,7 @@ def _GetPathAfterPublicHtml(p):
   return os.path.join(*accumulator)
 
 
-def ComposeConfig(local_path, base_host, username):
+def ComposeConfig(local_path, username, base_url):
   """Returns a ConfigParser object with a guessed config.
 
   Ideally this function won't access the machine, but only compose
@@ -86,19 +86,20 @@ def ComposeConfig(local_path, base_host, username):
   base_dir_name = os.path.split(local_path)[1]
   under_public_html = _GetPathAfterPublicHtml(local_path)
   config = {'general': {}, 'channel': {}, 'iTunes': {}}
+  parsed_url = urllib.parse.urlparse(base_url)
+  config['general']['base_url_path'] = parsed_url.path
+  config['general']['base_url'] = base_url
+  config['general']['feed_url'] = base_url + '/' + DEFAULT_FEED_NAME
+  config['general']['base_host'] = parsed_url.netloc
+  config['general']['image'] = base_url + '/cover.jpg'
   config['general']['input_dir'] = local_path
   config['general']['output_file'] = os.path.join(local_path, DEFAULT_FEED_NAME)
-  config['general']['base_host'] = base_host
-  config['general']['base_url_path'] = '/~%s/%s' % (username, under_public_html)
-  config['general']['base_url'] = 'http://%s/~%s/%s' % (
-      base_host, username, under_public_html)
   config['general']['feed_url'] = (
       config['general']['base_url'] + '/' + DEFAULT_FEED_NAME)
   config['channel']['title'] = base_dir_name.title()
   config['channel']['description'] = 'Podcast generated from %r' % local_path
   # What if the file doesn't exist?
-  config['iTunes']['image'] = 'http://%s/~%s/%s/cover.jpg' % (
-      base_host, username, under_public_html)
+  config['iTunes']['image'] = '%s/cover.jpg' % (base_url,)
   return config
 
 
@@ -251,29 +252,19 @@ def main():
                       action='store_true',
                       help="Generate pretty XML")
   parser.add_argument("--title", help="Podcast title", default="")
-  parser.add_argument("--base_url", default="",
-                      help=("Base URL of the directory as viewed from the "
-                            "Internet, like http://example.com/foo/bar. This "
-                            "option is useful when the feed is generated on a "
-                            "different host than the serving host."))
+  parser.add_argument(
+      "--base_url",
+      help=("Base URL of the directory as viewed from the "
+            "Internet, like http://example.com/foo/bar. This "
+            "option is useful when the feed is generated on a "
+            "different host than the serving host."),
+      required=True)
   args = parser.parse_args()
   username = getpass.getuser()
   input_dir = os.path.abspath(args.input_dir)
-  if 'public_html' not in input_dir and not args.base_url:
-    print('You either need to pass a directory like '
-          '~/public_html/foo, or you need to pass --base_url.')
-    sys.exit(1)
-  host_name = socket.getfqdn()
-  config = ComposeConfig(input_dir, host_name, username)
+  config = ComposeConfig(input_dir, username, args.base_url)
   if args.title:
     config['channel']['title'] = args.title
-  if args.base_url:
-    parsed_url = urllib.parse.urlparse(args.base_url)
-    config['general']['base_url_path'] = parsed_url.path
-    config['general']['base_url'] = args.base_url
-    config['general']['feed_url'] = args.base_url + '/' + DEFAULT_FEED_NAME
-    config['general']['base_host'] = parsed_url.netloc
-    config['general']['image'] = args.base_url + '/cover.jpg'
   podcast = Podcast(config)
   podcast.Process()
   podcast.Write(args.pretty)
